@@ -24,7 +24,7 @@ uploaded_file = st.file_uploader('Upload your data file here', type=['csv'])
 
 if uploaded_file:
     # Generate unique name with timestamp
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now().strftime("%d%m%Y_%H%M%S")
     file_path = os.path.join(DATA_DIR, f"data_{timestamp}.csv")
 
     # Save uploaded file
