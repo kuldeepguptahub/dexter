@@ -35,7 +35,7 @@ def enrich_gold_summary():
             continue
 
         try:
-            result = summarizer(text, max_length=50, min_length=20, do_sample=False)
+            result = summarizer(text, max_length=25, min_length=10, do_sample=False)
             one_line_summaries.append(result[0]['summary_text'])
         except Exception as e:
             logging.error(f"Error summarizing text: {e}")
