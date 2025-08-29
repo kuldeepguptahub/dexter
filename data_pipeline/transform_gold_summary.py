@@ -45,7 +45,7 @@ def enrich_gold_summary():
 
     # Save Gold Layer
     ts = datetime.now().strftime("%d%m%Y_%H%M%S")
-    gold_file = os.path.join(GOLD_DIR, f"gold_summary_{ts}.parquet")
+    gold_file = os.path.join(GOLD_DIR, f"gold_{ts}.parquet")
     df.to_parquet(gold_file, index=False)
 
     logging.info(f"{datetime.now()} - Enriched {silver_file} → {gold_file} with one_line_summary")
