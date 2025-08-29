@@ -67,7 +67,7 @@ def process_tags():
 
     # Save enriched dataset with timestamp
     timestamp = datetime.now().strftime("%d%m%Y_%H%M%S")
-    output_path = f"lakehouse/gold_enriched_{timestamp}.parquet"
+    output_path = f"lakehouse/gold/gold_enriched_{timestamp}.parquet"
     df.to_parquet(output_path, index=False)
 
     end_time = datetime.now()
