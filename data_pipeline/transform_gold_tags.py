@@ -63,7 +63,7 @@ def process_tags():
         results = list(executor.map(tag_row, [row for _, row in df.iterrows()]))
 
     # Attach results
-    df[['chat_department', 'issue_type', 'resolution_type']] = pd.DataFrame(results, index=df.index)
+    df[['department', 'issue_type', 'resolution_type']] = pd.DataFrame(results, index=df.index)
 
     # Save enriched dataset with timestamp
     timestamp = datetime.now().strftime("%d%m%Y_%H%M%S")

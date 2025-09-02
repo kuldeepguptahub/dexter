@@ -1,49 +1,58 @@
-import os
 from datetime import datetime
 import logging
 import pandas as pd
+from pathlib import Path
+import logging
+import glob, os
+import streamlit as st
+from utils import get_latest_file, timestamp
 
-BRONZE_DIR = "lakehouse/bronze"
-SILVER_DIR = "lakehouse/silver"
-LOG_FILE = "logs/silver.log"
-
-os.makedirs(SILVER_DIR, exist_ok=True)
+BRONZE_PATH = Path("lakehouse/bronze")
+SILVER_PATH = Path("lakehouse/silver")
+LOG_FILE = Path("logs/pipeline.log")
 
 logging.basicConfig(filename=LOG_FILE, level=logging.INFO)
 
-def get_latest_bronze():
-    """Fetch the latest parquet file from bronze"""
-    files = [f for f in os.listdir(BRONZE_DIR) if f.endswith(".parquet")]
-    if not files:
-        raise FileNotFoundError("❌ No bronze data found.")
-    latest = max(files, key=lambda x: os.path.getmtime(os.path.join(BRONZE_DIR, x)))
-    return os.path.join(BRONZE_DIR, latest)
+# ------------------------
+# TRANSFORM SILVER
+# ------------------------
 
 def transform_silver():
-    bronze_file = get_latest_bronze()
-    df = pd.read_parquet(bronze_file)
+    """Transforms latest bronze file and saves cleaned output to silver zone."""
+    st.sidebar.success("Transforming data to Silver layer...")
+    try:
+        # Step 1: Load latest bronze file
+        latest_bronze_file = get_latest_file(BRONZE_PATH)
+        df = pd.read_parquet(latest_bronze_file)
+        logging.info(f"SILVER - Loaded bronze file: {latest_bronze_file.name}")
 
-    # --- Transformations ---
-    # 1. Convert datetime → date (string format YYYY-MM-DD)
-    if "datetime" in df.columns:
-        df["date"] = pd.to_datetime(df["Timestamp"]).dt.date
-        df.drop(columns=["Timestamp"], inplace=True, errors="ignore")
+        # Step 2: Rename columns
+        df.columns = [col.strip().lower().replace(" ", "_") for col in df.columns]
 
-    # 2. Remove duplicate chat_id
-    if "Chat ID" in df.columns:
-        before = len(df)
-        df = df.drop_duplicates(subset=["Chat ID"], keep="first")
-        after = len(df)
-        logging.info(f"Removed {before - after} duplicate chat_id rows")
+        # Step 3: Convert timestamp to date
+        if 'timestamp' in df.columns:
+            df['date'] = pd.to_datetime(df['timestamp'], errors='coerce').dt.date
+            df = df.drop(columns=['timestamp'])
+            logging.info("SILVER - Converted 'timestamp' to 'date' and dropped original column")
+        else:
+            logging.warning("SILVER - 'timestamp' column not found")
 
-    # Save to Silver
-    ts = datetime.now().strftime("%d%m%Y_%H%M%S")
-    silver_file = os.path.join(SILVER_DIR, f"silver_{ts}.parquet")
-    df.to_parquet(silver_file, index=False)
+        # Step 4: Drop duplicates by chat_id
+        if 'chat_id' in df.columns:
+            df = df.drop_duplicates(subset=['chat_id'])
+            logging.info("SILVER - Dropped duplicates based on 'chat_id'")
+        else:
+            logging.warning("SILVER - 'chat_id' column not found")
 
-    logging.info(f"{datetime.now()} - Transformed {bronze_file} → {silver_file}")
-    print(f"✅ Transformed {bronze_file} → {silver_file}")
+        # Step 5: Save to silver zone
+        SILVER_PATH.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%d-%m-%Y_%H-%M-%S")
+        silver_file = SILVER_PATH / f"silver_{timestamp}.parquet"
+        df.to_parquet(silver_file, index=False)
+        logging.info(f"SILVER - Saved transformed data to {silver_file.name}")
+        st.sidebar.success("Data transformed and saved to Silver layer")    
 
-if __name__ == "__main__":
-    transform_silver()
-
+    except Exception as e:
+        logging.error(f"SILVER - Transformation failed: {e}")
+        st.sidebar.error("Data transformation failed")
+        raise
