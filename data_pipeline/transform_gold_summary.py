@@ -1,68 +1,72 @@
 import pandas as pd
+import numpy as np
 from pathlib import Path
 import logging
 import streamlit as st
 from data_pipeline.utils import get_latest_file, timestamp
 from transformers import pipeline
 
+# Define paths
 SILVER_PATH = Path("lakehouse/silver")
 GOLD_PATH = Path("lakehouse/gold")
-LOG_FILE = Path("logs/pipeline.log")
-
-logging.basicConfig(filename=LOG_FILE, level=logging.INFO)
-
-# ------------------------
-# TRANSFORM GOLD - Add One-Line Summary
-# ------------------------
 
 def enrich_gold_summary():
-    """Update data with one-line summary"""
+    """Update data with one-line summary using DistilBART CNN"""
+
+    # Load latest silver and gold files
     silver_file = get_latest_file(SILVER_PATH)
-    df = pd.read_parquet(silver_file)
+    silver = pd.read_parquet(silver_file)
+    silver['one_line_summary'] = pd.NA
+    silver['tags'] = np.nan
 
-    # Merge with latest file in gold on chat_id
     gold_file = get_latest_file(GOLD_PATH)
-    if gold_file:
-        gold_df = pd.read_parquet(gold_file)
-        df = pd.merge(df, gold_df, on="chat_id", how="outer", suffixes=("_silver", "_gold"))
+    gold = pd.read_parquet(gold_file)
 
-        df["chat_summary"] = df["chat_summary_gold"].combine_first(df["chat_summary_silver"])
-        df.drop(columns=["chat_summary_silver", "chat_summary_gold"], inplace=True)
+    # Merge silver and gold, keeping latest chat_id entries
+    df = pd.concat([silver, gold], ignore_index=True)
+    df = df.drop_duplicates(subset=['chat_id'], keep='last')
+    df['date'] = pd.to_datetime(df['date'], errors='coerce')
 
-    # Check if one-line summary exists
-    if "one_line_summary" not in df.columns:
-        df["one_line_summary"] = df["one_line_summary"].astype(str)
+    # Filter rows needing summarization
+    df_no_one_liner = df[df['one_line_summary'].isna()].copy()
 
-    # Filter the df where df['one_line_summary'] is blank
-    df_no_one_liner = df[df['one_line_summary'].str.strip() == ""]
-
-    # Load summarizer (DistilBART CNN)
+    # Load summarizer
     summarizer = pipeline("summarization", model="sshleifer/distilbart-cnn-12-6")
 
+    # Generate summaries
     one_line_summaries = []
+    summary_status = []
+
     for text in df_no_one_liner["chat_summary"].fillna("").tolist():
         if not text.strip():
             one_line_summaries.append("NA")
+            summary_status.append("EMPTY")
             continue
 
         try:
             result = summarizer(text, max_length=25, min_length=10, do_sample=False)
             one_line_summaries.append(result[0]['summary_text'])
+            summary_status.append("OK")
         except Exception as e:
             logging.error(f"{timestamp()} Error summarizing text: {e}")
             one_line_summaries.append("ERROR")
+            summary_status.append("ERROR")
 
-    df_no_one_liner["one_line_summary"] = df_no_one_liner["one_line_summary"].astype(str)
+    # Assign summaries and status
+    df_no_one_liner["one_line_summary"] = one_line_summaries
+    df_no_one_liner["summary_status"] = summary_status
 
-    # Combine back with original df
-    df = df.combine_first(df_no_one_liner)
+    # Merge updated rows back into full DataFrame
+    df.update(df_no_one_liner)
 
-    # Save Gold Layer
-    gold_file = GOLD_PATH / f"gold_summary_{timestamp()}.parquet"
-    df.to_parquet(gold_file, index=False)
+    # Save updated gold file
+    output_file = GOLD_PATH / f"gold_summary_{timestamp()}.parquet"
+    df.to_parquet(output_file, index=False)
 
-    logging.info(f"{timestamp()} GOLD - Updated {silver_file} with one_line_summary - {gold_file}")
-    st.sidebar.success(f"✅ Updated {silver_file} with one_line_summary - {gold_file}")
+    # Log and notify
+    updated_count = len(df_no_one_liner)
+    logging.info(f"{timestamp()} GOLD - Updated {silver_file} with one_line_summary - {output_file} for {updated_count} rows")
+    st.sidebar.success(f"✅ Updated {silver_file} with one_line_summary - {output_file} for {updated_count} rows")
 
 if __name__ == "__main__":
     enrich_gold_summary()

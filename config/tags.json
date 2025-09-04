@@ -1,9 +1,12 @@
 {
-  "department": ["sales", "technical_support", "billing", "affiliates", "other"],
+  "department": ["sales", "technical-support", "billing", "affiliates"],
   "issue_type": [
     "IP-block", "email-sending-issue", "email-receiving-issue", "ssl-problem",
     "primary-domain-change", "dns-related", "wordpress", "web-design",
-    "grace-period", "cancellation", "refund", "new-order", "payment-issue"
+    "grace-period", "cancellation", "refund", "new-order", "payment-issue", "ai-builder", "wp-password-reset", 
+    "policy-related", "503-error", "high-resource-usage", "pricing-concern", "wp-installation", 
+    "delete-website", "inode-issue", "disk-space-issue", "server-outage", "vps-server", 
+    "node.js", "python", "php-update"
   ],
-  "resolution_type": ["resolved", "escalated", "unsure"]
+  "resolution_type": ["resolved", "escalated"]
 }

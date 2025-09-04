@@ -1,83 +1,102 @@
 import pandas as pd
-import json
+from pathlib import Path
 import logging
+import streamlit as st
+from data_pipeline.utils import get_latest_file, timestamp
 from transformers import pipeline
-from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
-import glob
-import os
 
-GOLD_DIR = "lakehouse/gold"
-# -------------------
-# Logging setup
-# -------------------
-logging.basicConfig(
-    filename="logs/gold.log",
-    level=logging.INFO,
-    format="%(asctime)s - TAGS - %(levelname)s - %(message)s"
-)
+GOLD_PATH = Path("lakehouse/gold")
+LOG_FILE = Path("logs/pipeline.log")
 
-# -------------------
-# Load vocab
-# -------------------
-with open("config/tags.json", "r") as f:
-    tag_vocab = json.load(f)
+logging.basicConfig(filename=LOG_FILE, level=logging.INFO)
 
-# -------------------
-# Load classifier
-# -------------------
-classifier = pipeline("zero-shot-classification", model="facebook/bart-large-mnli")
+# ------------------------
+# TRANSFORM GOLD - Add tags based on chat summary and one-liner
+# ------------------------
 
-def classify_text(text, labels):
-    """Classify text against candidate labels with multi-label support"""
-    result = classifier(text, candidate_labels=labels, multi_label=True)
-    return [label for label, score in zip(result["labels"], result["scores"]) if score > 0.5]
+# Get latest file from Gold and create dataframe
+logging.info(f"{timestamp()} GOLD - Fetching latest file from Gold layer")
+gold_file = get_latest_file(GOLD_PATH)
+df = pd.read_parquet(gold_file)
 
-def tag_row(row):
-    """Generate tags for a single row"""
-    text = f"Summary: {row['Chat Summary']} One-liner: {row['one_line_summary']} Comment: {row['Customer Comment']}"
-    department = classify_text(text, tag_vocab["department"])
-    issue_type = classify_text(text, tag_vocab["issue_type"])
-    resolution = classify_text(text, tag_vocab["resolution_type"])
-    return department, issue_type, resolution
+# Fallbacks
+fallback_department = "technical-support"
+fallback_issue = "general-issue"
 
-def get_latest_gold():
-    """Fetch latest silver file"""
-    files = [f for f in os.listdir(GOLD_DIR) if f.endswith(".parquet")]
-    if not files:
-        raise FileNotFoundError("❌ No gold data found.")
-    latest = max(files, key=lambda x: os.path.getmtime(os.path.join(GOLD_DIR, x)))
-    return os.path.join(GOLD_DIR, latest)
+# Fallbacks
+fallback_department = "technical-support"
+fallback_issue = "general-issue"
 
-def process_tags():
-    start_time = datetime.now()
-    logging.info("Tagging process started...")
-
-    # Load latest gold_summary file
-    input_path = get_latest_gold()
-    df = pd.read_parquet(input_path)
-    logging.info(f"Loaded {len(df)} rows from {input_path}")
-
-    # Parallel execution
-    with ThreadPoolExecutor() as executor:
-        results = list(executor.map(tag_row, [row for _, row in df.iterrows()]))
-
-    # Attach results
-    df[['department', 'issue_type', 'resolution_type']] = pd.DataFrame(results, index=df.index)
-
-    # Save enriched dataset with timestamp
-    timestamp = datetime.now().strftime("%d%m%Y_%H%M%S")
-    output_path = f"lakehouse/gold/gold_enriched_{timestamp}.parquet"
-    df.to_parquet(output_path, index=False)
-
-    end_time = datetime.now()
-    elapsed = (end_time - start_time).total_seconds()
-
-    logging.info(f"Processed {len(df)} rows. Saved enriched file to {output_path}")
-    logging.info(f"Time taken: {elapsed:.2f} seconds")
-    logging.info("Tagging process completed.\n")
-
-    print(f"✅ Tags added and saved to {output_path}")
-
-if __name__ == "__main__":
-    process_tags()
+def assign_tags(summary, one_line, existing):
+    """Generate tags based on vocab, but keep existing if already present."""
+    if existing and str(existing).strip().lower() not in ["none", "nan", ""]:
+        return existing  # keep provided sample tags
+    
+    text = f"{summary} {one_line}".lower()
+    tags = []
+    
+    # Department
+    if "payment" in text or "invoice" in text or "paypal" in text or "billing" in text:
+        dept = "billing"
+    elif "price" in text or "plan" in text or "sales" in text or "renew" in text:
+        dept = "sales"
+    elif "affiliate" in text:
+        dept = "affiliates"
+    else:
+        dept = fallback_department
+    tags.append(dept)
+    
+    # Issue type (max 2)
+    issues = []
+    mapping = {
+        "ip": "IP-block",
+        "blocked": "IP-block",
+        "email": "email-sending-issue",
+        "receive": "email-receiving-issue",
+        "ssl": "ssl-problem",
+        "domain": "primary-domain-change",
+        "dns": "dns-related",
+        "wordpress": "wordpress",
+        "design": "web-design",
+        "grace": "grace-period",
+        "cancel": "cancellation",
+        "refund": "refund",
+        "order": "new-order",
+        "payment": "payment-issue",
+        "ai builder": "ai-builder",
+        "password": "wp-password-reset",
+        "policy": "policy-related",
+        "503": "503-error",
+        "resource": "high-resource-usage",
+        "price": "pricing-concern",
+        "500": "500-error",
+        "ftp": "ftp-issue",
+        "400": "400-error",
+        "install": "wp-installation",
+        "delete": "delete-website",
+        "inode": "inode-issue",
+        "disk": "disk-space-issue",
+        "outage": "server-outage",
+        "vps": "vps-server",
+        "node": "node.js",
+        "python": "python",
+        "php": "php-update",
+    }
+    
+    for k, v in mapping.items():
+        if k in text and v not in issues:
+            issues.append(v)
+    
+    if not issues:
+        issues = [fallback_issue]
+    
+    tags.extend(issues[:2])
+    
+    # Resolution type (optional)
+    if "escalated" in text or "forwarded" in text:
+        tags.append("escalated")
+    elif "resolved" in text or "fixed" in text or "solved" in text:
+        tags.append("resolved")
+    
+    # Format as quoted CSV-style
+    return ", ".join([f"\"{t}\"" for t in tags])
