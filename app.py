@@ -1,13 +1,9 @@
 import streamlit as st
 from data_pipeline.transform_silver import transform_silver
-from data_pipeline.transform_gold_summary import enrich_gold_summary
-from data_pipeline.transform_gold_tags import assign_tags
 from data_pipeline.utils import get_latest_file, timestamp
 import logging
 from pathlib import Path
 import pandas as pd
-import numpy as np
-from datetime import datetime
 
 LOG_PATH = Path("logs/pipeline.log")
 BRONZE_PATH = Path("lakehouse/bronze")
@@ -25,13 +21,12 @@ if uploaded_file is not None:
     df = pd.read_csv(uploaded_file)
     st.sidebar.success("File uploaded successfully")
 
-    timestamp = datetime.now().strftime("%d-%m-%Y_%H-%M-%S")
-    logging.info(f"File uploaded at {timestamp}")
+    logging.info(f"File uploaded at {timestamp()} with {len(df)} records")
 
     # Convert CSV to parquet
-    parquet_file = BRONZE_PATH / f"bronze_{timestamp}.parquet"
+    parquet_file = BRONZE_PATH / f"bronze_{timestamp()}.parquet"
     df.to_parquet(parquet_file, index=False)
-    logging.info(f"File converted to parquet at {parquet_file}")
+    logging.info(f"BRONZE - File converted to parquet")
 
     st.sidebar.success("Data refreshed and saved to Bronze layer")
 
@@ -39,23 +34,21 @@ if uploaded_file is not None:
     transform_silver()
     st.sidebar.success("Data transformed and saved to Silver layer")
 
-    # enrich gold summary
-    enrich_gold_summary()
-    st.sidebar.success("Data enriched and saved to Gold layer, starting tagging process")
+    # Create df from latest silver file
+    df = pd.read_parquet(get_latest_file(SILVER_PATH))
 
-    # create df from latest gold file
-    latest_gold = get_latest_file(GOLD_PATH)
-    df = pd.read_parquet(latest_gold)
+    # Transform Gold
+    from data_pipeline.transform_gold import assign_tags
 
-    # assign tags
     df = df.copy()  # avoid SettingWithCopyWarning
-    df["tags"] = df.apply(lambda row: assign_tags(row["chat_summary"], row["one_line_summary"], row["tags"]), axis=1)
-    logging.info(f"{timestamp} GOLD - Assigned tags to {len(df)} records")
-    st.sidebar.success("Tags updated and saved to Gold layer, data ready for analysis")
-
-    # Save updated gold file
-    gold_file = GOLD_PATH / f"gold_summary_tags_{timestamp}.parquet"
+    df["tags"] = None  # initialize tags column
+    st.sidebar.success(f'Adding tags to {len(df)} records')
+    
+    df["tags"] = df.apply(lambda row: assign_tags(row["chat_summary"], row["tags"]), axis=1)
+    gold_file = GOLD_PATH / f"gold_{timestamp()}.parquet"
     df.to_parquet(gold_file, index=False)
+    logging.info(f"GOLD - Data transformed and saved to Gold layer")
+    st.sidebar.success("Data transformed and saved to Gold layer, ready for analysis")
 
 # Display the dataframe in the main area
 latest_gold = get_latest_file(GOLD_PATH)

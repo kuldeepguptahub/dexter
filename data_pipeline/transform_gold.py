@@ -1,38 +1,38 @@
 import pandas as pd
 from pathlib import Path
 import logging
-import streamlit as st
 from data_pipeline.utils import get_latest_file, timestamp
-from transformers import pipeline
 
+SILVER_PATH = Path("lakehouse/silver")
 GOLD_PATH = Path("lakehouse/gold")
 LOG_FILE = Path("logs/pipeline.log")
 
 logging.basicConfig(filename=LOG_FILE, level=logging.INFO)
 
 # ------------------------
-# TRANSFORM GOLD - Add tags based on chat summary and one-liner
+# TRANSFORM GOLD - Add tags based on chat summary
 # ------------------------
 
 # Get latest file from Gold and create dataframe
 logging.info(f"{timestamp()} GOLD - Fetching latest file from Gold layer")
-gold_file = get_latest_file(GOLD_PATH)
-df = pd.read_parquet(gold_file)
+silver_file = get_latest_file(SILVER_PATH)
+df = pd.read_parquet(silver_file)
 
+# add tags column if not present
+if "tags" not in df.columns:
+    df["tags"] = None
+    
 # Fallbacks
 fallback_department = "technical-support"
 fallback_issue = "general-issue"
 
-# Fallbacks
-fallback_department = "technical-support"
-fallback_issue = "general-issue"
 
-def assign_tags(summary, one_line, existing):
+def assign_tags(summary, existing):
     """Generate tags based on vocab, but keep existing if already present."""
     if existing and str(existing).strip().lower() not in ["none", "nan", ""]:
         return existing  # keep provided sample tags
     
-    text = f"{summary} {one_line}".lower()
+    text = f"{summary}".lower()
     tags = []
     
     # Department
