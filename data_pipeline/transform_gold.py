@@ -1,4 +1,6 @@
 import pandas as pd
+import re
+import json
 from pathlib import Path
 import logging
 from data_pipeline.utils import get_latest_file, timestamp
@@ -48,44 +50,13 @@ def assign_tags(summary, existing):
     
     # Issue type (max 2)
     issues = []
-    mapping = {
-        "ip": "IP-block",
-        "blocked": "IP-block",
-        "email": "email-sending-issue",
-        "receive": "email-receiving-issue",
-        "ssl": "ssl-problem",
-        "domain": "primary-domain-change",
-        "dns": "dns-related",
-        "wordpress": "wordpress",
-        "design": "web-design",
-        "grace": "grace-period",
-        "cancel": "cancellation",
-        "refund": "refund",
-        "order": "new-order",
-        "payment": "payment-issue",
-        "ai builder": "ai-builder",
-        "password": "wp-password-reset",
-        "policy": "policy-related",
-        "503": "503-error",
-        "resource": "high-resource-usage",
-        "price": "pricing-concern",
-        "500": "500-error",
-        "ftp": "ftp-issue",
-        "400": "400-error",
-        "install": "wp-installation",
-        "delete": "delete-website",
-        "inode": "inode-issue",
-        "disk": "disk-space-issue",
-        "outage": "server-outage",
-        "vps": "vps-server",
-        "node": "node.js",
-        "python": "python",
-        "php": "php-update",
-    }
-    
-    for k, v in mapping.items():
-        if k in text and v not in issues:
-            issues.append(v)
+    tags_map = json.loads(Path('config/tags.json').read_text())
+
+    for k, v in tags_map.items():
+        for keyword in v:
+            pattern = r'\b' + re.escape(keyword.lower()) + r'\b'
+            if re.search(pattern, text):
+                issues.append(k)            
     
     if not issues:
         issues = [fallback_issue]
