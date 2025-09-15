@@ -105,7 +105,7 @@ with col1:
 with col2:
     # Display department wise pie chart
     fig, ax = plt.subplots(figsize=(8, 6))
-    df_tags[df_tags.isin(["sales", "billing", "technical-support"])].value_counts().plot.pie(autopct='%1.1f%%')
+    df_tags[df_tags.isin(["sales", "billing", "technical-support", "affiliates"])].value_counts().plot.pie(autopct='%1.1f%%')
     plt.title('Department wise Chat Distribution')
     plt.ylabel('')
     st.pyplot(fig)
