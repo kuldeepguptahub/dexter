@@ -48,7 +48,7 @@ def assign_tags(summary, existing):
         dept = fallback_department
     tags.append(dept)
     
-    # Issue type (max 2)
+    # Issue type based on keywords
     issues = []
     tags_map = json.loads(Path('config/tags.json').read_text())
 
@@ -61,7 +61,7 @@ def assign_tags(summary, existing):
     if not issues:
         issues = [fallback_issue]
     
-    tags.extend(issues[:2])
+    tags.extend(issues)
     
     # Resolution type (optional)
     if "escalated" in text or "forwarded" in text:

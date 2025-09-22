@@ -17,7 +17,7 @@
   "order": ["new order", "place order", "buy plan", "purchase"],
   "payment-concern": ["payment issue", "invoice", "billing issue", "payment error", "billing error"],
   "ai-builder": ["ai builder"],
-  "wp-password-reset": ["password", "reset password", "forgot password"],
+  "wp-password-reset": ["wordpress password", "wp password", "wp admin password", "wp-admin password"],
   "policy-related": ["policy", "terms of service", "privacy policy"],
   "503-error": ["503", "503 error", "service unavailable"],
   "high-resource-usage": ["resource", "high usage", "cpu usage", "memory spike"],
@@ -33,6 +33,8 @@
   "vps-server": ["vps", "virtual server", "vps dashboard"],
   "node.js": ["node", "node.js", "node server"],
   "python": ["python", "python script", "python error"],
-  "php-update": ["php", "php version", "update php"],
-  "database-issue": ["database", "db error", "database error"]
+  "php-update": ["php version", "update php"],
+  "database-issue": ["db error", "database error"],
+  "cPanel Password": ["cpanel password", "cPanel login", "cPanel access"],
+  "new-gui": ["dashboard update", "dashboard interface", "gui", "dashboard gui", "new layout", "new dashboard", "new interface", "new dashboard layout", "UI update"]
 }

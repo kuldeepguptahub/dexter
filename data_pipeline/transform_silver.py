@@ -39,8 +39,12 @@ def transform_silver():
 
         # Step 4: Drop duplicates by chat_id
         if 'chat_id' in df.columns:
-            df = df.drop_duplicates(subset=['chat_id'])
-            logging.info(f"{timestamp()} SILVER - Dropped duplicates based on 'chat_id'")
+            duplicates = df.duplicated(subset=['chat_id']).sum()
+            if duplicates > 0:
+                df = df.drop_duplicates(subset=['chat_id'])
+                logging.info(f"{timestamp()} SILVER - Found {duplicates} duplicates, dropped duplicates based on 'chat_id'")
+            else:
+                logging.info(f"{timestamp()} SILVER - No duplicates found based on 'chat_id'")
         else:
             logging.warning(f"{timestamp()} SILVER - 'chat_id' column not found")
 
